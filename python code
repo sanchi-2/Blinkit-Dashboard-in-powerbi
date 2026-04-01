@@ -1,0 +1,89 @@
+STEP -1: Jupyter notebook connection with python
+# Import libraries
+import mysql.connector
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+# -----------------------------
+# 🔌 Connect to MySQL
+# -----------------------------
+conn = mysql.connector.connect(
+    host="127.0.0.1",
+    user="root",
+    password="shagun",
+    database="blinkit_db"
+)
+# -----------------------------
+# 📥 Load data from MySQL
+# -----------------------------
+query = "SELECT * FROM blinkit_data;"
+df = pd.read_sql(query, conn)
+# -----------------------------
+# 🧹 Data Preprocessing
+# -----------------------------
+# Convert categorical to numeric
+
+df = pd.get_dummies(df, columns=[
+    "Item_Fat_Content",
+    "Outlet_Size",
+    "Outlet_Location_Type",
+    "Outlet_Type"
+], drop_first=True)
+
+# -----------------------------
+# 🎯 Select Features & Target
+# -----------------------------
+X = df[[
+    "Item_Visibility",
+    "Item_Weight",
+    "Rating",
+    "Outlet_Establishment_Year"
+] + [col for col in df.columns if "Outlet_" in col or "Item_Fat_Content_" in col]]
+
+ 	                                                             
+
+y = df["Total_Sales"]
+
+# -----------------------------
+# ✂️ Train-Test Split
+# -----------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# -----------------------------
+# 🌲 Train Model
+# -----------------------------
+model = RandomForestRegressor(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+print("✅ Model Trained Successfully!")
+
+# -----------------------------
+# 🔮 Predict Sales
+# -----------------------------
+predictions = model.predict(X)
+
+# -----------------------------
+# 🗄️ Store Predictions in MySQL
+# -----------------------------
+cursor = conn.cursor()
+
+# Add column if not exists
+try:
+    cursor.execute("ALTER TABLE blinkit_data ADD COLUMN Predicted_Sales FLOAT;")
+except:
+    pass  # column already exists
+
+# Update predictions
+for i, pred in enumerate(predictions):
+    cursor.execute(
+        "UPDATE blinkit_data SET Predicted_Sales = %s WHERE Item_Identifier = %s",
+        (float(pred), df.iloc[i]["Item_Identifier"])
+    )
+
+conn.commit()
+conn.close()
+
+print("🚀 Predictions Stored in Database!")
+
